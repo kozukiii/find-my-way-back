@@ -169,6 +169,45 @@ function createHeartGeometry(scale = 0.023) {
   return geometry;
 }
 
+function createPromiseRing() {
+  const ringGroup = new THREE.Group();
+  const gold = new THREE.MeshStandardMaterial({
+    color: 0xffd368,
+    emissive: 0x8c4e05,
+    emissiveIntensity: 1.15,
+    metalness: 0.92,
+    roughness: 0.2,
+  });
+  const gemstone = new THREE.MeshPhysicalMaterial({
+    color: 0xffb8d0,
+    emissive: 0x7a2044,
+    emissiveIntensity: 0.75,
+    metalness: 0.08,
+    roughness: 0.08,
+    transmission: 0.22,
+    thickness: 0.35,
+    toneMapped: false,
+  });
+
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.052, 16, 56), gold);
+  ringGroup.add(band);
+
+  const setting = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.1, 8), gold);
+  setting.rotation.z = Math.PI / 2;
+  setting.position.y = 0.29;
+  ringGroup.add(setting);
+
+  const stone = new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), gemstone);
+  stone.scale.set(1, 1.16, 0.82);
+  stone.position.y = 0.39;
+  stone.rotation.z = Math.PI / 4;
+  ringGroup.add(stone);
+
+  ringGroup.rotation.x = -0.55;
+  ringGroup.scale.setScalar(1.32);
+  return ringGroup;
+}
+
 function createStars() {
   const count = reducedMotion ? 90 : 180;
   const positions = new Float32Array(count * 3);
@@ -313,7 +352,7 @@ function buildMazeScene() {
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.34, 0.045, 12, 48),
-    new THREE.MeshBasicMaterial({ color: 0xffc2d7, transparent: true, opacity: 0.8, toneMapped: false }),
+    new THREE.MeshBasicMaterial({ color: 0xffd47a, transparent: true, opacity: 0.8, toneMapped: false }),
   );
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.12;
@@ -322,7 +361,7 @@ function buildMazeScene() {
   const beacon = new THREE.Mesh(
     new THREE.CylinderGeometry(0.1, 0.42, 2.7, 24, 1, true),
     new THREE.MeshBasicMaterial({
-      color: 0xff7cac,
+      color: 0xffbf4d,
       transparent: true,
       opacity: 0.08,
       side: THREE.DoubleSide,
@@ -332,15 +371,11 @@ function buildMazeScene() {
   beacon.position.y = 1.35;
   goal.add(beacon);
 
-  const goalHeart = new THREE.Mesh(
-    createHeartGeometry(0.014),
-    new THREE.MeshBasicMaterial({ color: 0xffc1d6, toneMapped: false }),
-  );
-  goalHeart.position.y = 0.62;
-  goalHeart.rotation.z = Math.PI;
-  goal.add(goalHeart);
+  const promiseRing = createPromiseRing();
+  promiseRing.position.y = 0.72;
+  goal.add(promiseRing);
 
-  const goalLight = new THREE.PointLight(0xff9abc, 7, 5.5, 2);
+  const goalLight = new THREE.PointLight(0xffc75f, 7, 5.5, 2);
   goalLight.position.y = 1.1;
   goal.add(goalLight);
   mazeGroup.add(goal);
