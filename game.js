@@ -30,7 +30,7 @@ let playerLight;
 let goal;
 let goalCell;
 let grid;
-let solutionParents;
+let mazeGroup;
 let hintGroup;
 let starField;
 let position = { ...START };
@@ -44,12 +44,19 @@ let pointerStart = null;
 let lastTime = 0;
 let wallBumps = 0;
 
-function seededRandom() {
-  let seed = 22082026;
+function seededRandom(initialSeed) {
+  let seed = initialSeed >>> 0;
   return () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 4294967296;
   };
+}
+
+function randomSeed() {
+  if (globalThis.crypto?.getRandomValues) {
+    return globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+  }
+  return (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
 }
 
 function shuffle(items, random) {
@@ -61,7 +68,7 @@ function shuffle(items, random) {
 }
 
 function generateMaze() {
-  const random = seededRandom();
+  const random = seededRandom(randomSeed());
   const maze = Array.from({ length: ROWS }, () => Array(COLS).fill(1));
 
   function carve(x, y) {
@@ -99,25 +106,32 @@ function key(cell) {
 function findFarthestCell(start) {
   const queue = [start];
   const distance = new Map([[key(start), 0]]);
-  const parents = new Map();
   let farthest = start;
+  let farthestSeparated = null;
 
   while (queue.length) {
     const current = queue.shift();
     if (distance.get(key(current)) > distance.get(key(farthest))) farthest = current;
+    const separation = Math.abs(current.x - start.x) + Math.abs(current.y - start.y);
+    if (
+      separation >= 6 &&
+      (!farthestSeparated || distance.get(key(current)) > distance.get(key(farthestSeparated)))
+    ) {
+      farthestSeparated = current;
+    }
 
     for (const direction of Object.values(DIRECTIONS)) {
       const next = { x: current.x + direction.x, y: current.y + direction.y };
       const nextKey = key(next);
       if (grid[next.y]?.[next.x] === 0 && !distance.has(nextKey)) {
         distance.set(nextKey, distance.get(key(current)) + 1);
-        parents.set(nextKey, current);
         queue.push(next);
       }
     }
   }
 
-  return { cell: farthest, parents };
+  const cell = farthestSeparated || farthest;
+  return { cell, distance: distance.get(key(cell)), reachableCells: distance.size };
 }
 
 function worldFromCell(cell) {
@@ -158,7 +172,7 @@ function createHeartGeometry(scale = 0.023) {
 function createStars() {
   const count = reducedMotion ? 90 : 180;
   const positions = new Float32Array(count * 3);
-  const random = seededRandom();
+  const random = seededRandom(22082026);
 
   for (let index = 0; index < count; index += 1) {
     positions[index * 3] = (random() - 0.5) * 28;
@@ -178,11 +192,40 @@ function createStars() {
   return new THREE.Points(geometry, material);
 }
 
+function disposeMazeGroup() {
+  if (!mazeGroup) return;
+  const geometries = new Set();
+  const materials = new Set();
+
+  mazeGroup.traverse((object) => {
+    if (object.geometry) geometries.add(object.geometry);
+    if (Array.isArray(object.material)) object.material.forEach((material) => materials.add(material));
+    else if (object.material) materials.add(object.material);
+  });
+
+  geometries.forEach((geometry) => geometry.dispose());
+  materials.forEach((material) => material.dispose());
+  scene.remove(mazeGroup);
+}
+
 function buildMazeScene() {
-  grid = generateMaze();
-  const farthest = findFarthestCell(START);
-  goalCell = farthest.cell;
-  solutionParents = farthest.parents;
+  disposeMazeGroup();
+  mazeGroup = new THREE.Group();
+  scene.add(mazeGroup);
+
+  let goalResult;
+  let attempts = 0;
+  do {
+    grid = generateMaze();
+    goalResult = findFarthestCell(START);
+    attempts += 1;
+  } while ((goalResult.distance < 18 || goalResult.reachableCells < 39) && attempts < 16);
+
+  goalCell = goalResult.cell;
+  const openCellCount = grid.flat().filter((cell) => cell === 0).length;
+  if (goalResult.reachableCells !== openCellCount || goalResult.distance === 0) {
+    throw new Error("Maze generation produced an unreachable route.");
+  }
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(COLS + 4, ROWS + 4),
@@ -190,7 +233,7 @@ function buildMazeScene() {
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.06;
-  scene.add(floor);
+  mazeGroup.add(floor);
 
   const wallCells = [];
   const pathCells = [];
@@ -216,7 +259,7 @@ function buildMazeScene() {
     paths.setMatrixAt(index, pathMatrix);
   });
   paths.instanceMatrix.needsUpdate = true;
-  scene.add(paths);
+  mazeGroup.add(paths);
 
   const wallGeometry = new THREE.BoxGeometry(0.91, 0.72, 0.91);
   const wallMaterial = new THREE.MeshStandardMaterial({
@@ -235,7 +278,7 @@ function buildMazeScene() {
     walls.setMatrixAt(index, matrix);
   });
   walls.instanceMatrix.needsUpdate = true;
-  scene.add(walls);
+  mazeGroup.add(walls);
 
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xb64f76, transparent: true, opacity: 0.42 });
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(wallGeometry), lineMaterial);
@@ -243,7 +286,7 @@ function buildMazeScene() {
     const edge = edges.clone();
     const world = worldFromCell(cell);
     edge.position.set(world.x, 0.3, world.z);
-    scene.add(edge);
+    mazeGroup.add(edge);
   });
 
   player = new THREE.Mesh(
@@ -254,14 +297,15 @@ function buildMazeScene() {
     }),
   );
   targetWorld.copy(worldFromCell(START));
+  moveStartWorld.copy(targetWorld);
   player.position.copy(targetWorld);
   player.position.y = 0.54;
   player.rotation.z = Math.PI;
-  scene.add(player);
+  mazeGroup.add(player);
 
   playerLight = new THREE.PointLight(0xff4f8f, 3.8, 3.2, 2);
   playerLight.position.copy(player.position).add(new THREE.Vector3(0, 0.8, 0));
-  scene.add(playerLight);
+  mazeGroup.add(playerLight);
 
   const goalWorld = worldFromCell(goalCell);
   goal = new THREE.Group();
@@ -299,10 +343,13 @@ function buildMazeScene() {
   const goalLight = new THREE.PointLight(0xff9abc, 7, 5.5, 2);
   goalLight.position.y = 1.1;
   goal.add(goalLight);
-  scene.add(goal);
+  mazeGroup.add(goal);
 
   hintGroup = new THREE.Group();
-  scene.add(hintGroup);
+  mazeGroup.add(hintGroup);
+
+  position = { ...START };
+  moveProgress = 1;
 }
 
 function init() {
@@ -352,6 +399,7 @@ function resize() {
 }
 
 function setStatus(message, bumped = false) {
+  if (!status) return;
   status.textContent = message;
   status.classList.toggle("bump", bumped);
   if (bumped) window.setTimeout(() => status.classList.remove("bump"), 220);
@@ -448,16 +496,11 @@ function winGame() {
 }
 
 function resetGame() {
-  position = { ...START };
-  targetWorld.copy(worldFromCell(position));
-  targetWorld.y = 0.54;
-  player.position.copy(targetWorld);
-  playerLight.position.copy(player.position).add(new THREE.Vector3(0, 0.8, 0));
-  moveProgress = 1;
   gameWon = false;
   wallBumps = 0;
   hintVisible = false;
   hintButton.classList.remove("active");
+  buildMazeScene();
   updateHintPath();
   setStatus("Follow the light");
 }
