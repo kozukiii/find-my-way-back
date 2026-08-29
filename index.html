@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#09050c" />
+    <meta
+      name="description"
+      content="A tiny maze about finding my way back to you."
+    />
+    <title>Find My Way Back to You</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="game-shell">
+      <canvas id="maze" aria-label="A three-dimensional heart maze"></canvas>
+
+      <header class="game-header" aria-live="polite">
+        <div>
+          <p class="eyebrow">A little journey</p>
+          <h1>Find my way back to you</h1>
+        </div>
+        <button id="hint" class="hint-button" type="button">Hint</button>
+      </header>
+
+      <p id="status" class="status">Follow the light</p>
+
+      <section class="controls" aria-label="Maze controls">
+        <p>Swipe anywhere or use the arrows</p>
+        <div class="d-pad">
+          <button class="direction up" type="button" data-direction="up" aria-label="Move up">↑</button>
+          <button class="direction left" type="button" data-direction="left" aria-label="Move left">←</button>
+          <span class="d-pad-heart" aria-hidden="true">♡</span>
+          <button class="direction right" type="button" data-direction="right" aria-label="Move right">→</button>
+          <button class="direction down" type="button" data-direction="down" aria-label="Move down">↓</button>
+        </div>
+      </section>
+
+      <section id="intro" class="overlay visible" aria-labelledby="intro-title">
+        <div class="card">
+          <p class="eyebrow">For you</p>
+          <h2 id="intro-title">There are a thousand paths.</h2>
+          <p>But my heart knows exactly where it belongs.</p>
+          <button id="begin" class="primary-button" type="button">Begin the journey</button>
+        </div>
+      </section>
+
+      <section id="ending" class="overlay" aria-labelledby="ending-title" aria-hidden="true">
+        <div class="card ending-card">
+          <p class="eyebrow">I found you</p>
+          <div class="big-heart" aria-hidden="true">♥</div>
+          <h2 id="ending-title">Every time.</h2>
+          <p>No matter where life takes us, my heart will always find its way back to you.</p>
+          <button id="again" class="secondary-button" type="button">Find you again</button>
+        </div>
+      </section>
+
+      <p id="fallback" class="fallback" hidden>
+        This little maze needs WebGL. Please open it in Safari and refresh the page.
+      </p>
+    </main>
+
+    <script type="module" src="game.js"></script>
+  </body>
+</html>
